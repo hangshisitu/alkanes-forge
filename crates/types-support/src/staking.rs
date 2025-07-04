@@ -30,13 +30,20 @@ impl Staking {
     pub fn get_alanes_id(&self) -> AlkaneId {
         AlkaneId { block: self.alkanes_id[0], tx: self.alkanes_id[1] }
     }
-    pub fn get_end_height(&self,height:u64) -> u64 {
-        let end = if self.unstaking_height>0{
-            self.unstaking_height
+    pub fn get_mining_end_height(&self,height:u64) -> u64 {
+        if self.unstaking_height>0{
+            min(min(self.unstaking_height,self.expire_height),height as u64)
         }else{
             min(self.expire_height,height as u64)
-        };
-        end
+        }
+    }
+
+    pub fn get_release_end_height(&self,height:u64)-> u64{
+        if self.unstaking_height>0{
+            min(self.unstaking_height,height as u64)
+        }else{
+            height as u64
+        }
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>> {

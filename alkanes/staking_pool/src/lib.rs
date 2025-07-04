@@ -87,8 +87,8 @@ enum StakingPoolMessage {
         invite_alkanes_id_t: u128,
     },
 
-    // #[opcode(51)]
-    // Unstaking,
+    #[opcode(51)]
+    Unstaking,
 
     #[opcode(53)]
     #[returns(String)]
@@ -97,8 +97,8 @@ enum StakingPoolMessage {
         height: u128
     },
 
-    // #[opcode(54)]
-    // Claim,
+    #[opcode(54)]
+    Claim,
 
     /// Get the name of the collection
     #[opcode(99)]
@@ -315,7 +315,7 @@ impl StakingPool {
         let count  = self.get_orbital_count();
         let curr_staking = self.get_staking(index);
         let start = curr_staking.staking_height;
-        let end = curr_staking.get_end_height(height as u64)-1;
+        let end = curr_staking.get_mining_end_height(height as u64)-1;
         let  c  = Decimal::from(curr_staking.staking_value)
         .checked_mul(Decimal::from(end-start+1)).unwrap()
         .checked_mul(Decimal::from(period_to_w(curr_staking.period))).unwrap();
@@ -326,7 +326,7 @@ impl StakingPool {
         for i in 0..count{
             let staking = self.get_staking(i+1);
             let t_s = staking.staking_height+1;
-            let t_e = staking.get_end_height( height as u64);
+            let t_e = staking.get_mining_end_height( height as u64);
             let length = max(min(t_e,end)-max(t_s,start),0);
             if length == 0{
                 continue;
@@ -367,17 +367,18 @@ impl StakingPool {
     fn calc_profit(&self,index:u128,height:u128) -> Result<(u128,u128,u128)>{
         let curr_staking = self.get_staking(index);
         let mut start = curr_staking.staking_height;
-        let end = curr_staking.get_end_height(height as u64);
+        let end = curr_staking.get_mining_end_height(height as u64);
         let curr_staking_w = Decimal::from(curr_staking.staking_value) * period_to_w(curr_staking.period);
         let rate =Decimal::from(1) / Decimal::from(PROFIT_RELEASE_HEIGHT);
         let factor = curr_staking_w * Decimal::from(MINING_ONE_BLOCK_VOLUME);
-
+        let release_end = curr_staking.get_release_end_height(height as u64);
+        
         let mut total_p = Decimal::from(0); 
         let mut total_r = Decimal::from(0);
         while start < end{ 
             let p = factor / self.get_staking_weight(start);
             total_p += p;
-            let cnt = end-start;
+            let cnt = release_end-start;
             let r = if cnt >= PROFIT_RELEASE_HEIGHT {
                 p
             } else {
@@ -401,6 +402,40 @@ impl StakingPool {
         Ok(response)
     }
 
+
+    fn unstaking(&self) -> Result<CallResponse> { 
+        let context = self.context()?;
+
+        let caller_index = self.staking_id2index_pointer(&context.caller).get_value::<u128>();
+        if caller_index == 0 {
+            return Err(anyhow!("caller is not staking"));
+        }
+
+        self.staking_unstaking(caller_index);
+        let response = CallResponse::forward(&context.incoming_alkanes);
+        Ok(response)
+    }
+
+    fn claim(&self) -> Result<CallResponse> { 
+        let context = self.context()?;
+
+        let caller_index = self.staking_id2index_pointer(&context.caller).get_value::<u128>();
+        if caller_index == 0 {
+            return Err(anyhow!("caller is not staking"));
+        }
+
+        let mut response = CallResponse::forward(&context.incoming_alkanes);
+
+        let (_,r,w) = self.calc_profit(caller_index,self.height() as u128)?;
+        if r>w {
+            response.alkanes.0.push(AlkaneTransfer {
+                id: self.get_coin_id(),
+                value: r-w,
+            });
+        }
+        
+        Ok(response)
+    }
 
     /// Verify that the caller is the contract owner using collection token
     ///
@@ -523,7 +558,7 @@ impl StakingPool {
         self.set_orbital_count(index);
     }
 
-    fn staking_unstaking(&mut self, index: u128) { 
+    fn staking_unstaking(&self, index: u128) { 
         let mut staking = self.get_staking(index);
         staking.unstaking_height = self.height();
         self.staking_pointer(index).set(Arc::new(Staking::serialize(&staking).unwrap()));
@@ -706,22 +741,8 @@ impl StakingPool {
     /// Get data for a specific orbital
     pub fn get_data(&self, index: u128) -> Result<CallResponse> {
         let context = self.context()?;
-        let mut response = CallResponse::forward(&context.incoming_alkanes);
-        let background ="";
-
-        let (f, s) = encode_string_to_u128(&background);
-        let cellpack = Cellpack {
-            target: ALKANE_BG_ID,
-            inputs: vec![1001, f, s],
-        };
-
-        let call_response = self.staticcall(
-            &cellpack,
-            &AlkaneTransferParcel::default(),
-            self.fuel(),
-        )?;
-
-        let bg = call_response.data;
+        let response = CallResponse::forward(&context.incoming_alkanes);
+        //TODO
         Ok(response)
     }
 
@@ -730,8 +751,8 @@ impl StakingPool {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
 
-        // let attributes = PngGenerator::get_attributes(index)?;
-        // response.data = attributes.into_bytes();
+        let staking = self.get_staking(index);
+        response.data = serde_json::to_vec(&staking)?;
         Ok(response)
     }
     

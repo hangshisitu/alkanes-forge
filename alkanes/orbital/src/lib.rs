@@ -13,8 +13,8 @@ use alkanes_support::{
     response::CallResponse,
 };
 
-use anyhow::Result;
-use std::sync::Arc;
+use anyhow::{Result,anyhow};
+use std::{sync::Arc};
 
 #[derive(Default)]
 pub struct OrbitalInstance(());
@@ -57,16 +57,26 @@ enum OrbitalInstanceMessage {
     #[opcode(1002)]
     #[returns(String)]
     GetAttributes,
+
+    #[opcode(1003)]
+    #[returns(String)]
+    GetProfit{height: u128},
+
+    #[opcode(1004)]
+    Unstaking,
+
+    #[opcode(1005)]
+    Claim,
 }
 
 impl Token for OrbitalInstance {
     fn name(&self) -> String {
-        let name = String::from("Beep Boop");
+        let name = String::from("Alkanes Staking oribital");
         format!("{} #{}", name, self.index() + 1)
     }
 
     fn symbol(&self) -> String {
-        let symbol = String::from("Beep Boop");
+        let symbol = String::from("so");
         format!("{} #{}", symbol, self.index() + 1)
     }
 }
@@ -197,6 +207,84 @@ impl OrbitalInstance {
 
         response.data = call_response.data;
 
+        Ok(response)
+    }
+
+    fn get_profit(&self,height:u128) -> Result<CallResponse> {
+        let context = self.context()?;
+        let mut response = CallResponse::forward(&context.incoming_alkanes);
+
+        let collection_id = self.collection_ref();
+
+        let cellpack = Cellpack {
+            target: collection_id,
+            inputs: vec![53, self.index(),height],
+        };
+
+        let call_response =
+            self.staticcall(&cellpack, &AlkaneTransferParcel::default(), self.fuel())?;
+
+        response.data = call_response.data;
+
+        Ok(response)
+    }
+    fn only_owner(&self) -> Result<()> {
+        let context = self.context()?;
+
+        if context.incoming_alkanes.0.len() != 1 {
+            return Err(anyhow!(
+                "did not authenticate with only the authentication token"
+            ));
+        }
+
+        let transfer = context.incoming_alkanes.0[0].clone();
+        if transfer.id != context.myself.clone() {
+            return Err(anyhow!("supplied alkane is not authentication token"));
+        }
+
+        if transfer.value < 1 {
+            return Err(anyhow!(
+                "less than 1 unit of authentication token supplied to authenticate"
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn unstaking(&self) -> Result<CallResponse> { 
+        self.only_owner()?;
+        let context = self.context()?;
+        let mut response = CallResponse::forward(&context.incoming_alkanes);
+        let collection_id = self.collection_ref();
+        let cellpack = Cellpack {
+            target: collection_id,
+            inputs: vec![1000, self.index()],
+        };
+
+        let call_response =
+            self.call(&cellpack, &AlkaneTransferParcel::default(), self.fuel())?;
+
+        response.data = call_response.data;
+        Ok(response)
+    }
+
+    fn claim(&self) -> Result<CallResponse> { 
+        self.only_owner()?;
+        let context = self.context()?;
+        let mut response = CallResponse::forward(&context.incoming_alkanes);
+        let collection_id = self.collection_ref();
+
+        let cellpack = Cellpack {
+            target: collection_id,
+            inputs: vec![54, self.index()],
+        };
+
+        let call_response =
+            self.call(&cellpack, &AlkaneTransferParcel::default(), self.fuel())?;
+        if call_response.alkanes.0.len() >0 {
+            response.alkanes.0.push(call_response.alkanes.0[0]);
+        }
+        response.data = call_response.data;
         Ok(response)
     }
 
