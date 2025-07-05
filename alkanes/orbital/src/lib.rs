@@ -258,7 +258,7 @@ impl OrbitalInstance {
         let collection_id = self.collection_ref();
         let cellpack = Cellpack {
             target: collection_id,
-            inputs: vec![1000, self.index()],
+            inputs: vec![51, self.index()],
         };
 
         let call_response =

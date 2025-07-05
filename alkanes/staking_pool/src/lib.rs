@@ -311,6 +311,7 @@ impl StakingPool {
     }
 
 
+    //不依赖中间状态的算法，两种可以对比验证
     fn calc_profit_1(&self,index:u128,height:u128) -> Result<(u128,u128,u128)>{ 
         let count  = self.get_orbital_count();
         let curr_staking = self.get_staking(index);
@@ -325,8 +326,8 @@ impl StakingPool {
         let mut v = Decimal::from(0);
         for i in 0..count{
             let staking = self.get_staking(i+1);
-            let t_s = staking.staking_height+1;
-            let t_e = staking.get_mining_end_height( height as u64);
+            let t_s = staking.staking_height;
+            let t_e = staking.get_mining_end_height( height as u64)-1;
             let length = max(min(t_e,end)-max(t_s,start),0);
             if length == 0{
                 continue;
@@ -349,12 +350,12 @@ impl StakingPool {
         pre_v.iter_mut().for_each(|v| *v = curr_staking_w.checked_div(*v).unwrap().checked_mul(Decimal::from(MINING_ONE_BLOCK_VOLUME)).unwrap());
 
 
+        let release_end = curr_staking.get_release_end_height(height as u64);
         //计算释放收益 TODO
-        let float_val = 0.01;
-        let rate = float_val.to_string().parse::<Decimal>().unwrap();
+        let rate = Decimal::from(1) / Decimal::from(PROFIT_RELEASE_HEIGHT);
         let release_p: Decimal = pre_v.iter().enumerate().map(|(i,v)| {
-            let cnt = end.checked_sub(i as u64).unwrap();
-            if cnt >= 100 {
+            let cnt = release_end.checked_sub(i as u64).unwrap();
+            if cnt >= PROFIT_RELEASE_HEIGHT {
                 *v
             } else {
                 v.checked_mul(rate).unwrap().checked_mul(Decimal::from(cnt)).unwrap()
@@ -558,12 +559,15 @@ impl StakingPool {
         self.set_orbital_count(index);
     }
 
-    fn staking_unstaking(&self, index: u128) { 
+    fn staking_unstaking(&self, index: u128) -> Result<()>{ 
         let mut staking = self.get_staking(index);
+        if staking.unstaking_height>0 {
+            return Err(anyhow!("already unstaking"));
+        }
         staking.unstaking_height = self.height();
         self.staking_pointer(index).set(Arc::new(Staking::serialize(&staking).unwrap()));
         if staking.expire_height <= self.height() {
-            return;
+            return Ok(());
         }
 
         let curr_w =  Decimal::from(staking.staking_value) * period_to_w(staking.period);
@@ -572,6 +576,7 @@ impl StakingPool {
         let h_exp_w = self.get_staking_expire(staking.expire_height);
         self.set_staking_expire(staking.expire_height, h_exp_w - curr_w);
 
+        Ok(())
         // let mut stat = self.get_staking_stat(staking.unstaking_height);
         // let curr_w =  Decimal::from(staking.staking_value) * period_to_w(staking.period);
         // stat.unstaking_weight += curr_w;
