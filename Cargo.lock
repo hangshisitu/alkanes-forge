@@ -32,14 +32,26 @@ dependencies = [
 name = "alkanes-forge"
 version = "0.1.0"
 dependencies = [
- "alkanes-runtime",
- "alkanes-support",
+ "alkanes-runtime 0.2.3",
+ "alkanes-support 0.2.3",
  "anyhow",
  "flate2",
  "hex",
  "metashrew-support",
- "ordinals",
- "protorune-support",
+ "ordinals 0.5.2",
+ "protorune-support 0.5.2",
+]
+
+[[package]]
+name = "alkanes-macros"
+version = "0.2.3"
+source = "git+https://github.com/kungfuflex/alkanes-rs?tag=v0.2.3#1bd14757c8778ebe75461ce8755ab78230f36683"
+dependencies = [
+ "ciborium",
+ "proc-macro2",
+ "quote",
+ "serde_json",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -56,16 +68,48 @@ dependencies = [
 
 [[package]]
 name = "alkanes-runtime"
-version = "0.5.2"
-source = "git+https://github.com/kungfuflex/alkanes-rs#f59b78b4e84e60690df5466ddba58c2b4613e01b"
+version = "0.2.3"
+source = "git+https://github.com/kungfuflex/alkanes-rs?tag=v0.2.3#1bd14757c8778ebe75461ce8755ab78230f36683"
 dependencies = [
- "alkanes-macros",
- "alkanes-support",
+ "alkanes-macros 0.2.3",
+ "alkanes-support 0.2.3",
  "anyhow",
  "bitcoin",
  "metashrew-support",
  "wasm-bindgen",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "alkanes-runtime"
+version = "0.5.2"
+source = "git+https://github.com/kungfuflex/alkanes-rs#f59b78b4e84e60690df5466ddba58c2b4613e01b"
+dependencies = [
+ "alkanes-macros 0.5.2",
+ "alkanes-support 0.5.2",
+ "anyhow",
+ "bitcoin",
+ "metashrew-support",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "alkanes-support"
+version = "0.2.3"
+source = "git+https://github.com/kungfuflex/alkanes-rs?tag=v0.2.3#1bd14757c8778ebe75461ce8755ab78230f36683"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "flate2",
+ "hex",
+ "metashrew-support",
+ "protobuf 3.7.2",
+ "protobuf-codegen 3.7.2",
+ "protoc-bin-vendored",
+ "protoc-rust",
+ "protorune-support 0.2.3",
+ "serde",
 ]
 
 [[package]]
@@ -82,7 +126,7 @@ dependencies = [
  "protobuf-codegen 3.7.2",
  "protoc-bin-vendored",
  "protoc-rust",
- "protorune-support",
+ "protorune-support 0.5.2",
  "serde",
 ]
 
@@ -349,13 +393,13 @@ dependencies = [
 name = "coin"
 version = "0.1.0"
 dependencies = [
- "alkanes-runtime",
- "alkanes-support",
+ "alkanes-runtime 0.2.3",
+ "alkanes-support 0.2.3",
  "anyhow",
  "bitcoin",
  "metashrew-support",
- "ordinals",
- "protorune-support",
+ "ordinals 0.5.2",
+ "protorune-support 0.5.2",
 ]
 
 [[package]]
@@ -743,12 +787,24 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 name = "orbital"
 version = "0.1.0"
 dependencies = [
- "alkanes-runtime",
- "alkanes-support",
+ "alkanes-runtime 0.2.3",
+ "alkanes-support 0.2.3",
  "anyhow",
  "metashrew-support",
- "ordinals",
- "protorune-support",
+ "ordinals 0.5.2",
+ "protorune-support 0.5.2",
+]
+
+[[package]]
+name = "ordinals"
+version = "0.2.3"
+source = "git+https://github.com/kungfuflex/alkanes-rs?tag=v0.2.3#1bd14757c8778ebe75461ce8755ab78230f36683"
+dependencies = [
+ "bitcoin",
+ "derive_more",
+ "serde",
+ "serde_with",
+ "thiserror",
 ]
 
 [[package]]
@@ -943,6 +999,24 @@ dependencies = [
 
 [[package]]
 name = "protorune-support"
+version = "0.2.3"
+source = "git+https://github.com/kungfuflex/alkanes-rs?tag=v0.2.3#1bd14757c8778ebe75461ce8755ab78230f36683"
+dependencies = [
+ "anyhow",
+ "bech32",
+ "bitcoin",
+ "hex",
+ "metashrew-support",
+ "ordinals 0.2.3",
+ "protobuf 3.7.2",
+ "protobuf-codegen 3.7.2",
+ "protoc-bin-vendored",
+ "protoc-rust",
+ "serde",
+]
+
+[[package]]
+name = "protorune-support"
 version = "0.5.2"
 source = "git+https://github.com/kungfuflex/alkanes-rs#f59b78b4e84e60690df5466ddba58c2b4613e01b"
 dependencies = [
@@ -951,7 +1025,7 @@ dependencies = [
  "bitcoin",
  "hex",
  "metashrew-support",
- "ordinals",
+ "ordinals 0.5.2",
  "protobuf 3.7.2",
  "protobuf-codegen 3.7.2",
  "protoc-bin-vendored",
@@ -1297,13 +1371,13 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 name = "staking_pool"
 version = "0.1.0"
 dependencies = [
- "alkanes-runtime",
- "alkanes-support",
+ "alkanes-runtime 0.2.3",
+ "alkanes-support 0.2.3",
  "anyhow",
  "bitcoin",
  "metashrew-support",
- "ordinals",
- "protorune-support",
+ "ordinals 0.5.2",
+ "protorune-support 0.5.2",
  "rust_decimal",
  "serde_json",
  "types-support",
@@ -1443,16 +1517,16 @@ dependencies = [
 name = "types-support"
 version = "0.1.0"
 dependencies = [
- "alkanes-runtime",
- "alkanes-support",
+ "alkanes-runtime 0.5.2",
+ "alkanes-support 0.5.2",
  "anyhow",
  "bincode",
  "bitcoin",
  "hex",
  "leb128",
  "metashrew-support",
- "ordinals",
- "protorune-support",
+ "ordinals 0.5.2",
+ "protorune-support 0.5.2",
  "rust_decimal",
  "serde",
  "serde_json",

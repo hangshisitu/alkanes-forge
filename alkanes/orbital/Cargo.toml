@@ -7,8 +7,8 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
-alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs",tag = "v0.2.3"}
+alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs",tag = "v0.2.3"}
 metashrew-support = { git = "https://github.com/sandshrewmetaprotocols/metashrew" }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
