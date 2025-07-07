@@ -151,7 +151,11 @@ enum StakingPoolMessage {
 
     #[opcode(1003)]
     #[returns(String)]
-    GetCoinAlkaneId,
+    GetCoinAlkanesId,
+
+    #[opcode(1004)]
+    #[returns(String)]
+    GetBalance,
 
 }
 
@@ -774,7 +778,7 @@ impl StakingPool {
         Ok(response)
     }
 
-    pub fn get_coin_alkane_id(&self) -> Result<CallResponse> {
+    pub fn get_coin_alkanes_id(&self) -> Result<CallResponse> {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
         let alkane_id = self.get_coin_id();
