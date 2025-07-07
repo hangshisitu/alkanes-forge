@@ -1,3 +1,4 @@
+use std::result::Result::Ok;
 use alkanes_runtime::{
     declare_alkane, message::MessageDispatch, runtime::AlkaneResponder, storage::StoragePointer,
     token::Token,
@@ -16,7 +17,7 @@ use alkanes_support::{
     witness::find_witness_payload,
 };
 
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{anyhow, Result};
 use bitcoin::{Block, Transaction, TxOut};
 use metashrew_support::utils::consensus_decode;
 use types_support::staking;
@@ -85,6 +86,7 @@ enum StakingPoolMessage {
         tx_part2: u128,
         invite_alkanes_id_b: u128,
         invite_alkanes_id_t: u128,
+        height: u128,
     },
 
     #[opcode(51)]
