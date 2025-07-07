@@ -220,7 +220,7 @@ impl StakingPool {
         let (symbol,_) = encode_string_to_u128(COIN_SYMBOL);
         let cellpack = Cellpack {
             target: AlkaneId {
-                block: 6,
+                block: 5,
                 tx: COIN_TEMPLATE_ID,
             },
             inputs: vec![0x0, CAP,name_part1,name_part2,symbol],
@@ -277,7 +277,7 @@ impl StakingPool {
 
         let cellpack = Cellpack {
             target: AlkaneId {
-                block: 6,
+                block: 5,
                 tx: ORBITAL_TEMPLATE_ID,
             },
             inputs: vec![0x0, index],
