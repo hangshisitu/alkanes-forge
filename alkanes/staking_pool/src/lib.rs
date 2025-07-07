@@ -417,7 +417,7 @@ impl StakingPool {
             return Err(anyhow!("caller is not staking"));
         }
 
-        self.staking_unstaking(caller_index);
+        self.staking_unstaking(caller_index)?;
         let response = CallResponse::forward(&context.incoming_alkanes);
         Ok(response)
     }
