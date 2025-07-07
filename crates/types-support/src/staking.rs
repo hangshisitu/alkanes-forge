@@ -20,21 +20,25 @@ pub struct Staking {
     pub invite_index: u128,
     pub staking_height: u64,      //质押brc20转账交易所在区块高度，开始产生收益, +1开始释放
     pub unstaking_height: u64,    //解质押交易所在区块高度, 该高度不算收益
-    pub expire_height: u64,       //过期区块高度，该高度不算收益  staking_height + period * 144
+    // pub expire_height: u64,       //过期区块高度，该高度不算收益  staking_height + period * 144
     pub alkanes_id: [u128;2],
     pub withdraw_coin_value: u128,
 }
 
 impl Staking {
 
+    pub fn get_expire_height(&self) -> u64 {
+        self.staking_height + self.period as u64 * 144
+    }
+
     pub fn get_alanes_id(&self) -> AlkaneId {
         AlkaneId { block: self.alkanes_id[0], tx: self.alkanes_id[1] }
     }
     pub fn get_mining_end_height(&self,height:u64) -> u64 {
         if self.unstaking_height>0{
-            min(min(self.unstaking_height,self.expire_height),height as u64)
+            min(min(self.unstaking_height,self.get_expire_height()),height as u64)
         }else{
-            min(self.expire_height,height as u64)
+            min(self.get_expire_height(),height as u64)
         }
     }
 
@@ -145,7 +149,6 @@ mod test{
             invite_index: 0,
             staking_height: 8459900,
             unstaking_height: 0,
-            expire_height: 8459990,
             alkanes_id: [2,12890],
             withdraw_coin_value: 893400,
         };

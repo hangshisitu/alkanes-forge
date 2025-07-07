@@ -16,7 +16,7 @@ use alkanes_support::{
     witness::find_witness_payload,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
 use bitcoin::{Block, Transaction, TxOut};
 use metashrew_support::utils::consensus_decode;
 use types_support::staking;
@@ -146,6 +146,11 @@ enum StakingPoolMessage {
     #[opcode(1002)]
     #[returns(String)]
     GetAttributes { index: u128 },
+
+    #[opcode(1003)]
+    #[returns(String)]
+    GetCoinAlkaneId,
+
 }
 
 /// Implementation of Token trait
@@ -252,14 +257,14 @@ impl StakingPool {
         tx_part2: u128,
         invite_alkanes_id_b: u128,
         invite_alkanes_id_t: u128,
+        height: u128
     ) -> Result<CallResponse> {
 
         self.only_owner()?;
 
-        let height = self.height();
-        if height < MINING_FIRST_HEIGHT{
+        if height < MINING_FIRST_HEIGHT as u128{
             return Err(anyhow!("Not yet started"));
-        }else if height > MINING_LAST_HEIGHT {
+        }else if height > MINING_LAST_HEIGHT as u128{
             return Err(anyhow!("Mining ended"));
         }
         if staking_value < MIN_STAKING_VALUE as u128 {
@@ -285,7 +290,6 @@ impl StakingPool {
         let sequence = self.sequence();
         let subresponse = self.call(&cellpack, &AlkaneTransferParcel::default(), self.fuel())?;
 
-        let p: u64 = period as u64;
         let staking = Staking {
             brc20_index: brc20_index as u8,
             brc20_value: brc20_value,
@@ -293,9 +297,8 @@ impl StakingPool {
             period: period as u16,
             tx: tx.try_into().unwrap(),
             invite_index,
-            staking_height: self.height(),
+            staking_height: height as u64,
             unstaking_height: 0u64,
-            expire_height: (self.height().checked_add(p.checked_mul(144).unwrap()).unwrap()) as u64,
             alkanes_id: [2,sequence],
             withdraw_coin_value: 0,
         };
@@ -545,8 +548,8 @@ impl StakingPool {
 
         let h_w = self.get_staking_weight(staking.staking_height);
         self.set_staking_weight(staking.staking_height, h_w + curr_w);
-        let h_exp_w = self.get_staking_expire(staking.expire_height);
-        self.set_staking_expire(staking.expire_height, h_exp_w + curr_w);
+        let h_exp_w = self.get_staking_expire(staking.get_expire_height());
+        self.set_staking_expire(staking.get_expire_height(), h_exp_w + curr_w);
 
 
         // let mut stat = self.get_staking_stat(staking.staking_height);
@@ -566,15 +569,15 @@ impl StakingPool {
         }
         staking.unstaking_height = self.height();
         self.staking_pointer(index).set(Arc::new(Staking::serialize(&staking).unwrap()));
-        if staking.expire_height <= self.height() {
+        if staking.get_expire_height() <= self.height() {
             return Ok(());
         }
 
         let curr_w =  Decimal::from(staking.staking_value) * period_to_w(staking.period);
         let h_w = self.get_staking_weight(staking.unstaking_height);
         self.set_staking_weight(staking.unstaking_height, h_w - curr_w);
-        let h_exp_w = self.get_staking_expire(staking.expire_height);
-        self.set_staking_expire(staking.expire_height, h_exp_w - curr_w);
+        let h_exp_w = self.get_staking_expire(staking.get_expire_height());
+        self.set_staking_expire(staking.get_expire_height(), h_exp_w - curr_w);
 
         Ok(())
         // let mut stat = self.get_staking_stat(staking.unstaking_height);
@@ -760,7 +763,23 @@ impl StakingPool {
         response.data = serde_json::to_vec(&staking)?;
         Ok(response)
     }
+
+    pub fn get_coin_alkane_id(&self) -> Result<CallResponse> {
+        let context = self.context()?;
+        let mut response = CallResponse::forward(&context.incoming_alkanes);
+        let alkane_id = self.get_coin_id();
+        response.data = format!("{}:{}", alkane_id.block,alkane_id.tx).try_into()?;
+        Ok(response)
+    }
     
+    pub fn get_balance(&self) -> Result<CallResponse> {
+        let context = self.context()?; 
+        let mut response = CallResponse::forward(&context.incoming_alkanes);
+        let alkane_id = self.get_coin_id();
+        let balance = self.balance(&context.myself, &alkane_id);
+        response.data = format!("{}",balance).try_into()?;
+        Ok(response)
+    }
 }
 
 declare_alkane! {
