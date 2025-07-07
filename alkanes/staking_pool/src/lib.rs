@@ -438,7 +438,11 @@ impl StakingPool {
                 id: self.get_coin_id(),
                 value: r-w,
             });
+            let mut staking = self.get_staking(caller_index);
+            staking.withdraw_coin_value += r-w;
+            self.set_staking(caller_index, &staking);
         }
+
         
         Ok(response)
     }
@@ -598,6 +602,10 @@ impl StakingPool {
     fn get_staking(&self, index: u128) -> Staking {
         let data = self.staking_pointer(index).get();
         Staking::descrialize(&data).unwrap()
+    }
+
+    fn set_staking(&self, index: u128, staking: &Staking) {
+        self.staking_pointer(index).set(Arc::new(Staking::serialize(staking).unwrap()));
     }
 
     fn get_staking_by_id(&self, alkane_id: &AlkaneId) ->Staking {
