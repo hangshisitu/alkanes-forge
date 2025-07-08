@@ -495,7 +495,7 @@ impl StakingPool {
         let bytes = self.coin_id_pointer().get();
         AlkaneId {
             block: u128::from_le_bytes(bytes[0..16].try_into().unwrap()),
-            tx: u128::from_le_bytes(bytes[8..32].try_into().unwrap()),
+            tx: u128::from_le_bytes(bytes[16..32].try_into().unwrap()),
         }
     }
 
@@ -782,7 +782,8 @@ impl StakingPool {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
         let alkane_id = self.get_coin_id();
-        response.data = format!("{}:{}", alkane_id.block,alkane_id.tx).try_into()?;
+        let str_alkane_id = format!("{}:{}", alkane_id.block,alkane_id.tx);
+        response.data = str_alkane_id.into_bytes();
         Ok(response)
     }
     
