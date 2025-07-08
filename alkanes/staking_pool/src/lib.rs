@@ -802,3 +802,30 @@ declare_alkane! {
         type Message = StakingPoolMessage;
     }
 }
+
+#[cfg(test)]
+mod test{
+
+    use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use web_sys::console;
+    use wasm_bindgen_test::*;
+
+    macro_rules! test_print {
+        ($($arg:tt)*) => {
+            #[cfg(target_arch = "wasm32")]
+            { console::log_1(&format!($($arg)*).into()) }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            { println!($($arg)*) }
+        };
+    }
+
+    #[wasm_bindgen_test]
+    fn test_staking(){ 
+        let s = StakingPool::default();
+        let alkanes_id = AlkaneId::new(2,0x6dc);
+        s.set_coin_id(&alkanes_id);
+        assert_eq!(s.get_coin_id(),alkanes_id);
+    }
+}

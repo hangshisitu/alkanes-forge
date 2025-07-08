@@ -1337,6 +1337,8 @@ dependencies = [
  "rust_decimal",
  "serde_json",
  "types-support",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
