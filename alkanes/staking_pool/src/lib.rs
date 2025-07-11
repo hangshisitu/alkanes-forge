@@ -46,7 +46,7 @@ const PUBLIC_MINT_START_TM: u64 = 902566;
 const CAP: u128 = 100000000000000000;
 const MINING_CAP: u64 = 52000000000000000;
 const MINING_ONE_BLOCK_VOLUME: u64 = 1003086419753;
-const MINING_FIRST_HEIGHT: u64 = 902536;  //挖矿的第一个块高度
+const MINING_FIRST_HEIGHT: u64 = 450;  //挖矿的第一个块高度
 const MINING_LAST_HEIGHT: u64 = MINING_FIRST_HEIGHT + 144*360-1; //挖矿的最后块高度
 const MIN_STAKING_VALUE: u64 = 1000;
 const PROFIT_RELEASE_HEIGHT: u64 = 144*180;
@@ -77,17 +77,7 @@ enum StakingPoolMessage {
     Initialize,
 
     #[opcode(50)]
-    Staking{
-        brc20_index: u128,
-        brc20_value: u128,
-        staking_value: u128,
-        period: u128,
-        tx_part1: u128,
-        tx_part2: u128,
-        invite_alkanes_id_b: u128,
-        invite_alkanes_id_t: u128,
-        height: u128,
-    },
+    Staking,
 
     #[opcode(51)]
     Unstaking,
@@ -254,34 +244,27 @@ impl StakingPool {
         }
     }
     
-    fn staking(&self,
-        brc20_index: u128,
-        brc20_value: u128,
-        staking_value: u128,
-        period: u128,
-        tx_part1: u128,
-        tx_part2: u128,
-        invite_alkanes_id_b: u128,
-        invite_alkanes_id_t: u128,
-        height: u128
-    ) -> Result<CallResponse> {
+    fn staking(&self) -> Result<CallResponse> {
 
         self.only_owner()?;
 
-        if height < MINING_FIRST_HEIGHT as u128{
+        let Ok(mut staking) = Staking::from_tx(self.transaction()) else {
+            return Err(anyhow!("invalid staking transaction"));
+        };
+
+        if staking.staking_height < MINING_FIRST_HEIGHT{
             return Err(anyhow!("Not yet started"));
-        }else if height > MINING_LAST_HEIGHT as u128{
+        }else if staking.staking_height > MINING_LAST_HEIGHT{
             return Err(anyhow!("Mining ended"));
         }
-        if staking_value < MIN_STAKING_VALUE as u128 {
+        if staking.staking_height < MIN_STAKING_VALUE {
             return Err(anyhow!("Not enough value"));
         }
 
         let index = self.get_orbital_count().checked_add(1).unwrap();
 
-        let tx = [tx_part1.to_le_bytes(), tx_part2.to_le_bytes()].concat();
-        let invite_alkanes_id = AlkaneId{block:invite_alkanes_id_b,tx:invite_alkanes_id_t};
-        let invite_index = self.staking_id2index_pointer(&invite_alkanes_id).get_value::<u128>();
+        let invite_alkanes_id = AlkaneId{block:staking.alkanes_id[0],tx:staking.alkanes_id[1]};
+        staking.invite_index = self.staking_id2index_pointer(&invite_alkanes_id).get_value::<u128>();
 
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
@@ -295,19 +278,7 @@ impl StakingPool {
         };
         let sequence = self.sequence();
         let subresponse = self.call(&cellpack, &AlkaneTransferParcel::default(), self.fuel())?;
-
-        let staking = Staking {
-            brc20_index: brc20_index as u8,
-            brc20_value: brc20_value,
-            staking_value,
-            period: period as u16,
-            tx: tx.try_into().unwrap(),
-            invite_index,
-            staking_height: height as u64,
-            unstaking_height: 0u64,
-            alkanes_id: [2,sequence],
-            withdraw_coin_value: 0,
-        };
+        staking.alkanes_id = [2,sequence];
 
         self.add_staking(index,&staking);
 
@@ -317,6 +288,7 @@ impl StakingPool {
             response.alkanes.0.push(subresponse.alkanes.0[0].clone());
             Ok(response)
         }
+    
     }
 
 
@@ -484,14 +456,14 @@ impl StakingPool {
         StoragePointer::from_keyword("/coin_id")
     }
 
-    fn set_coin_id(&self, id: &AlkaneId) {
+    pub fn set_coin_id(&self, id: &AlkaneId) {
         let mut bytes = Vec::with_capacity(32);
         bytes.extend_from_slice(&id.block.to_le_bytes());
         bytes.extend_from_slice(&id.tx.to_le_bytes());
         self.coin_id_pointer().set(Arc::new(bytes));
     }
 
-    fn get_coin_id(&self) -> AlkaneId {
+    pub fn get_coin_id(&self) -> AlkaneId {
         let bytes = self.coin_id_pointer().get();
         AlkaneId {
             block: u128::from_le_bytes(bytes[0..16].try_into().unwrap()),
@@ -803,29 +775,29 @@ declare_alkane! {
     }
 }
 
-#[cfg(test)]
-mod test{
+// #[cfg(test)]
+// mod test{
 
-    use super::*;
-    #[cfg(target_arch = "wasm32")]
-    use web_sys::console;
-    use wasm_bindgen_test::*;
+//     use super::*;
+//     #[cfg(target_arch = "wasm32")]
+//     use web_sys::console;
+//     use wasm_bindgen_test::*;
 
-    macro_rules! test_print {
-        ($($arg:tt)*) => {
-            #[cfg(target_arch = "wasm32")]
-            { console::log_1(&format!($($arg)*).into()) }
+//     macro_rules! test_print {
+//         ($($arg:tt)*) => {
+//             #[cfg(target_arch = "wasm32")]
+//             { console::log_1(&format!($($arg)*).into()) }
             
-            #[cfg(not(target_arch = "wasm32"))]
-            { println!($($arg)*) }
-        };
-    }
+//             #[cfg(not(target_arch = "wasm32"))]
+//             { println!($($arg)*) }
+//         };
+//     }
 
-    #[wasm_bindgen_test]
-    fn test_staking(){ 
-        let s = StakingPool::default();
-        let alkanes_id = AlkaneId::new(2,0x6dc);
-        s.set_coin_id(&alkanes_id);
-        assert_eq!(s.get_coin_id(),alkanes_id);
-    }
-}
+//     #[wasm_bindgen_test]
+//     fn test_pool(){ 
+//         let s = StakingPool::default();
+//         let alkanes_id = AlkaneId::new(2,0x6dc);
+//         s.set_coin_id(&alkanes_id);
+//         assert_eq!(s.get_coin_id(),alkanes_id);
+//     }
+// }

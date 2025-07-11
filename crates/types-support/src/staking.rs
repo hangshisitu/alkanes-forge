@@ -1,9 +1,13 @@
 
 use alkanes_support::id::AlkaneId;
+use alkanes_support::witness::find_witness_payload;
+use metashrew_support::utils::{consume_exact, consume_sized_int, consume_to_end,consensus_decode};
 use anyhow::{anyhow, Ok, Result};
 use bincode::{config, serde::decode_from_slice, serde::encode_to_vec};
+use bitcoin::Transaction;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
+use std::io::Cursor;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::*;
 
@@ -26,6 +30,28 @@ pub struct Staking {
 }
 
 impl Staking {
+
+    pub fn from_tx( raw_tx: Vec<u8>) -> Result<Self> {
+        let tx = consensus_decode::<Transaction>(&mut Cursor::new(raw_tx))?;
+        let data: Vec<u8> = find_witness_payload(&tx, 0).unwrap_or_else(|| vec![]);
+        Staking::from_vec8(data)
+    }
+
+    pub fn from_vec8(data: Vec<u8>) -> Result<Self> {
+        let mut cursor = Cursor::<Vec<u8>>::new(data);
+        Ok(Staking {
+            brc20_index: consume_sized_int::<u8>(&mut cursor)?,
+            brc20_value: consume_sized_int::<u128>(&mut cursor)?,
+            staking_value: consume_sized_int::<u128>(&mut cursor)?,
+            period:  consume_sized_int::<u16>(&mut cursor)?,
+            tx: consume_exact(&mut cursor,32)?.try_into().unwrap(),
+            alkanes_id: [consume_sized_int::<u128>(&mut cursor)?,consume_sized_int::<u128>(&mut cursor)?],
+            staking_height: consume_sized_int::<u64>(&mut cursor)?,
+            invite_index: 0,
+            unstaking_height: 0,
+            withdraw_coin_value: 0,
+        })
+    }
 
     pub fn get_expire_height(&self) -> u64 {
         self.staking_height + self.period as u64 * 144
@@ -191,5 +217,35 @@ mod test{
         let s = serde_json::to_string(&(p,r,w)).unwrap();
         test_print!("json {}",s);
         test_print!("json 2 {}",String::from_utf8(serde_json::to_vec(&(p,r,w)).unwrap()).unwrap());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_from(){
+        let s = "01005039278c0400000000000000000000307500000000000000000000000000006801191c9a279745a8a1f2781984b8b6dd1f2c0a4d65a70504d9fc78032e9fb894d8000000000000000000000000000000000000000000000000000000000000000088c50d0000000000";
+        let v = hex::decode(s).unwrap();
+        let staking = Staking::from_vec8(v).unwrap();
+        assert_eq!(staking, Staking{
+            brc20_index:1,
+            brc20_value:5000000000000,
+            staking_value:30000,
+            period:360,
+            tx: hex::decode("191c9a279745a8a1f2781984b8b6dd1f2c0a4d65a70504d9fc78032e9fb894d8").unwrap().try_into().unwrap(),
+            invite_index:0,
+            staking_height:902536,
+            unstaking_height:0,
+            alkanes_id: [0, 0],
+            withdraw_coin_value:0,
+        });
+    }
+
+    #[wasm_bindgen_test]
+    fn test_from_tx(){
+        let raw_tx = hex::decode("02000000000101b3b1f7252af64d70c00da99725a383d5ef3826072e3b61cc9b117209226b096d0000000000ffffffff0222020000000000002251207ca00ebfa26de5057dbdd3f26856cdd9722a9b7851e097a4c665f95f2aae500100000000000000000e6a5d0bff7f818cec82d08bc0a832034035abb02620b67a034a9a91ad741cb59fd0f54dbd9c674b5b977aea9f5d1b405637ece05698f66c09018ea9a432bd9fb447ed3d65d16692932058dfff8f10ae04972078bc362031e719bee54b3359292770e35f0adcce3970a749683ec9f9bb029ab3ac00630342494e004c6b0000743ba40b0000000000000000000000204e00000000000000000000000000001e00191c9a279745a8a1f2781984b8b6dd1f2c0a4d65a70504d9fc78032e9fb894d80000000000000000000000000000000000000000000000000000000000000000bf010000000000006821c178bc362031e719bee54b3359292770e35f0adcce3970a749683ec9f9bb029ab300000000").unwrap();
+        let ret = Staking::from_tx(raw_tx);
+        assert_eq!(ret.is_ok(), true);
+        if ret.is_ok() {
+            test_print!("tx staking {:?}",ret.unwrap());
+        }
+        
     }
 }
