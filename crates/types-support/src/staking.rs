@@ -5,6 +5,7 @@ use metashrew_support::utils::{consume_exact, consume_sized_int, consume_to_end,
 use anyhow::{anyhow, Ok, Result};
 use bincode::{config, serde::decode_from_slice, serde::encode_to_vec};
 use bitcoin::Transaction;
+use protorune_support::balance_sheet::IntoString;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::io::Cursor;
@@ -96,12 +97,11 @@ impl Staking {
     }
 
     pub fn serialize_decimal(d: &Decimal) -> Result<Vec<u8>>{
-        encode_to_vec(d, config::standard()).map_err(|e| anyhow!("serialize error:{}", e))
+        d.to_string().as_bytes().try_into().map_err(|e|anyhow!("serialize error: {}",e))
     }
 
     pub fn descrialize_decimal(v: &Vec<u8>) -> Result<Decimal>{
-        let (decimal,_) = decode_from_slice(v,config::standard()).map_err(|e|anyhow!("descrialize error:{}", e))?;
-        Ok(decimal)
+        Decimal::from_str(std::str::from_utf8(v).unwrap()).map_err(|e|anyhow!("serialize error: {}",e))
     }
 
 }
@@ -247,5 +247,16 @@ mod test{
             test_print!("tx staking {:?}",ret.unwrap());
         }
         
+    }
+
+    #[wasm_bindgen_test]
+    fn test_deciaml_ser(){
+        let d = Decimal::from_str("100000.23444433").unwrap();
+        let s = Staking::serialize_decimal(&d).unwrap();
+        assert_eq!(Staking::descrialize_decimal(&s).unwrap(),d);
+
+        // let h = hex::decode("0732303030302e30").unwrap();
+        // let dh = Staking::descrialize_decimal(&h).unwrap();
+        // test_print!("dh {:?}",dh);
     }
 }

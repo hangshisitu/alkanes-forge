@@ -257,7 +257,7 @@ impl StakingPool {
         }else if staking.staking_height > MINING_LAST_HEIGHT{
             return Err(anyhow!("Mining ended"));
         }
-        if staking.staking_height < MIN_STAKING_VALUE {
+        if staking.staking_value < MIN_STAKING_VALUE as u128{
             return Err(anyhow!("Not enough value"));
         }
 
@@ -297,18 +297,20 @@ impl StakingPool {
         let count  = self.get_orbital_count();
         let curr_staking = self.get_staking(index);
         let start = curr_staking.staking_height;
-        let end = curr_staking.get_mining_end_height(height as u64)-1;
+        let end: u64 = curr_staking.get_mining_end_height(height as u64);
         let  c  = Decimal::from(curr_staking.staking_value)
-        .checked_mul(Decimal::from(end-start+1)).unwrap()
+        .checked_mul(Decimal::from(end-start)).unwrap()
         .checked_mul(Decimal::from(period_to_w(curr_staking.period))).unwrap();
 
-        let mut pre_v =vec![Decimal::from(0);(end-start+1) as usize];
+        let mut pre_v =vec![Decimal::from(0);(end-start) as usize];
+
+        // return Ok((start as u128,end as u128,c.floor().try_into().unwrap()));
 
         let mut v = Decimal::from(0);
         for i in 0..count{
             let staking = self.get_staking(i+1);
             let t_s = staking.staking_height;
-            let t_e = staking.get_mining_end_height( height as u64)-1;
+            let t_e = staking.get_mining_end_height( height as u64);
             let length = max(min(t_e,end)-max(t_s,start),0);
             if length == 0{
                 continue;
@@ -319,23 +321,22 @@ impl StakingPool {
             let cross_e = min(t_e,end);
 
             //计算每个快质押量
-            while cross_s <= cross_e {
+            while cross_s < cross_e {
                 let t = (cross_s -start) as usize;
                 pre_v[t] = pre_v[t].checked_add(period_to_w(staking.period).checked_mul(Decimal::from(staking.staking_value)).unwrap()).unwrap();
                 cross_s +=1;
             }
         }
-        let p = c.checked_div(v).unwrap().checked_mul(Decimal::from(MINING_ONE_BLOCK_VOLUME)).unwrap().floor();
+        let p = c.checked_div(v).unwrap().checked_mul(Decimal::from(MINING_ONE_BLOCK_VOLUME)).unwrap().checked_mul(Decimal::from(end-start)).unwrap();
         let curr_staking_w = Decimal::from(curr_staking.staking_value).checked_mul(period_to_w(curr_staking.period)).unwrap();
         //计算每个快收益
         pre_v.iter_mut().for_each(|v| *v = curr_staking_w.checked_div(*v).unwrap().checked_mul(Decimal::from(MINING_ONE_BLOCK_VOLUME)).unwrap());
-
 
         let release_end = curr_staking.get_release_end_height(height as u64);
         //计算释放收益 TODO
         let rate = Decimal::from(1) / Decimal::from(PROFIT_RELEASE_HEIGHT);
         let release_p: Decimal = pre_v.iter().enumerate().map(|(i,v)| {
-            let cnt = release_end.checked_sub(i as u64).unwrap();
+            let cnt = release_end.checked_sub(i as u64 + start +1).unwrap();
             if cnt >= PROFIT_RELEASE_HEIGHT {
                 *v
             } else {
@@ -354,13 +355,13 @@ impl StakingPool {
         let rate =Decimal::from(1) / Decimal::from(PROFIT_RELEASE_HEIGHT);
         let factor = curr_staking_w * Decimal::from(MINING_ONE_BLOCK_VOLUME);
         let release_end = curr_staking.get_release_end_height(height as u64);
-        
+
         let mut total_p = Decimal::from(0); 
         let mut total_r = Decimal::from(0);
         while start < end{ 
             let p = factor / self.get_staking_weight(start);
             total_p += p;
-            let cnt = release_end-start;
+            let cnt = release_end-start-1; //下个块开始释放
             let r = if cnt >= PROFIT_RELEASE_HEIGHT {
                 p
             } else {
@@ -379,11 +380,13 @@ impl StakingPool {
         let (p,r,w) = self.calc_profit(index,height)?;
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
-
-        response.data = serde_json::to_vec(&(p,r,w))?;
+        response.data = serde_json::to_vec(&[p.to_string(),r.to_string(),w.to_string()]).unwrap();
         Ok(response)
     }
 
+    fn test_json(&self,p:u128,r:u128,w:u128) -> Vec<u8>{
+        serde_json::to_vec(&[p.to_string(),r.to_string(),w.to_string()]).unwrap()
+    }
 
     fn unstaking(&self) -> Result<CallResponse> { 
         let context = self.context()?;
@@ -520,7 +523,8 @@ impl StakingPool {
         let mut bytes = Vec::with_capacity(32);
         bytes.extend_from_slice(&alkane_id.block.to_le_bytes());
         bytes.extend_from_slice(&alkane_id.tx.to_le_bytes());
-        StoragePointer::from_keyword("/staking/id2index").select(&bytes)
+        //TODO字符串长度反而更短
+        StoragePointer::from_keyword("/staking/id2index/").select(&bytes)
     }
     fn add_staking(&self,index: u128,staking: &Staking) {
         self.staking_pointer(index).set(Arc::new(Staking::serialize(staking).unwrap()));
@@ -591,7 +595,7 @@ impl StakingPool {
 
     //邀请关系存款
     fn staking_invite_pointer(&self,index: u128) -> StoragePointer{
-        StoragePointer::from_keyword("/staking/share").select(&index.to_le_bytes().to_vec())
+        StoragePointer::from_keyword("/staking/share/").select(&index.to_le_bytes().to_vec())
     }
 
     fn get_invite_stakings(&self, index: u128) -> Vec<Staking> {
@@ -650,11 +654,11 @@ impl StakingPool {
     // }
 
     fn staking_weight_pointer(&self, height: u64) -> StoragePointer {
-        StoragePointer::from_keyword("/staking_weight").select(&height.to_le_bytes().to_vec())
+        StoragePointer::from_keyword("/staking_weight/").select(&height.to_le_bytes().to_vec())
     }
 
     fn staking_expire_pointer(&self, height: u64) -> StoragePointer {
-        StoragePointer::from_keyword("/staking_expire").select(&height.to_le_bytes().to_vec())
+        StoragePointer::from_keyword("/staking_expire/").select(&height.to_le_bytes().to_vec())
     }
 
     fn get_staking_expire(&self, height: u64) -> Decimal {
@@ -767,6 +771,10 @@ impl StakingPool {
         response.data = format!("{}",balance).try_into()?;
         Ok(response)
     }
+
+    pub fn set_storge(&self,key: Vec<u8>,value: Vec<u8>) -> (){
+        StoragePointer::wrap(&key).set(Arc::new(value));
+    }
 }
 
 declare_alkane! {
@@ -775,29 +783,92 @@ declare_alkane! {
     }
 }
 
-// #[cfg(test)]
-// mod test{
+#[cfg(test)]
+mod test{
 
-//     use super::*;
-//     #[cfg(target_arch = "wasm32")]
-//     use web_sys::console;
-//     use wasm_bindgen_test::*;
+    use std::str::RSplit;
 
-//     macro_rules! test_print {
-//         ($($arg:tt)*) => {
-//             #[cfg(target_arch = "wasm32")]
-//             { console::log_1(&format!($($arg)*).into()) }
+    use super::*;
+    use hex;
+    #[cfg(target_arch = "wasm32")]
+    use web_sys::console;
+    use wasm_bindgen_test::*;
+
+    macro_rules! test_print {
+        ($($arg:tt)*) => {
+            #[cfg(target_arch = "wasm32")]
+            { console::log_1(&format!($($arg)*).into()) }
             
-//             #[cfg(not(target_arch = "wasm32"))]
-//             { println!($($arg)*) }
-//         };
-//     }
+            #[cfg(not(target_arch = "wasm32"))]
+            { println!($($arg)*) }
+        };
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_pool(){ 
-//         let s = StakingPool::default();
-//         let alkanes_id = AlkaneId::new(2,0x6dc);
-//         s.set_coin_id(&alkanes_id);
-//         assert_eq!(s.get_coin_id(),alkanes_id);
-//     }
-// }
+    #[wasm_bindgen_test]
+    fn test_pool(){ 
+        let s = StakingPool::default();
+        let alkanes_id = AlkaneId::new(2,0x6dc);
+        s.set_coin_id(&alkanes_id);
+        assert_eq!(s.get_coin_id(),alkanes_id);
+    }
+
+    // #[wasm_bindgen_test]
+    // fn test_get_profit(){
+    //     let sp = StakingPool::default();
+    //     let k1 = hex::decode("2f7374616b696e675f7765696768742fc401000000000000").unwrap();
+    //     let staking_weight =  Decimal::from_str("20000.0").unwrap();
+    //     // let v1 = hex::decode("0732303030302e30").unwrap();
+    //     sp.set_storge(k1, Staking::serialize_decimal(&staking_weight).unwrap());
+
+    //     let k1 = hex::decode("2f7374616b696e672f01000000000000000000000000000000").unwrap();
+    //     let v1 = hex::decode("00fd00743ba40b000000fb204e1e191c9a279745a8a1f2781984b8b6dd1f2c0a4d65a70504d9fc78032e9fb894d800fbc4010002fba00800").unwrap();
+    //     sp.set_storge(k1, v1);
+
+    //     let k1 = hex::decode("2f7374616b696e675f6578706972652fa412000000000000").unwrap();
+    //     // let v1 = hex::decode("0732303030302e30").unwrap();
+    //     sp.set_storge(k1, Staking::serialize_decimal(&staking_weight).unwrap());
+
+    //     let k1 = hex::decode("2f6f72626974616c5f636f756e74").unwrap();
+    //     let v1 = hex::decode("01000000000000000000000000000000").unwrap();
+    //     sp.set_storge(k1, v1);
+
+    //     let k1 = hex::decode("2f7374616b696e672f696432696e6465782f02000000000000000000000000000000a0080000000000000000000000000000").unwrap();
+    //     let v1 = hex::decode("01000000000000000000000000000000").unwrap();
+    //     sp.set_storge(k1, v1);
+    //     let (p,r,w) = sp.calc_profit(1, 457).unwrap();
+        
+    //     assert_eq!(p,5015432098765);
+    //     assert_eq!(r,386993217);
+    //     assert_eq!(w,0);
+    //     let (p1,r1,w1) =sp.calc_profit_1(1, 457).unwrap();
+    //     test_print!("{:?} {:?} {:?}",p1,r1,w1);
+    //     assert_eq!(p,p1);
+    //     assert_eq!(r,r1);
+    //     assert_eq!(w,w1);
+
+    // }
+
+    #[wasm_bindgen_test]
+    fn test_get_profit2(){
+        let sp = StakingPool::default();
+        let index = sp.get_brc20_count() +1;
+        let staking = Staking { brc20_index: 0,
+            brc20_value: 800000000,
+            staking_value: 50000, period: 60,
+            tx: [0;32],
+            invite_index: 0,
+            staking_height: 455,
+            unstaking_height: 0,
+            alkanes_id: [2,111128],
+            withdraw_coin_value: 0 };
+
+        sp.add_staking(index as u128, &staking);
+
+        let (p,r,w) = sp.calc_profit(index as u128, 468).unwrap();
+        let (p1,r1,w1) =sp.calc_profit_1(index as u128, 468).unwrap();
+        test_print!("{:?} {:?} {:?}",p1,r1,w1);
+        assert_eq!(p,p1);
+        assert_eq!(r,r1);
+        assert_eq!(w,w1);
+    }
+}

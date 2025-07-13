@@ -2173,6 +2173,7 @@ dependencies = [
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.6",
+ "hex",
  "metashrew-core",
  "metashrew-support",
  "ordinals 0.5.2",
