@@ -282,7 +282,7 @@ impl StakingPool {
 
         self.add_staking(index,&staking);
 
-        if response.alkanes.0.len() < 1 {
+        if subresponse.alkanes.0.len() < 1 {
             Err(anyhow!("orbital token not returned with factory"))
         } else {
             response.alkanes.0.push(subresponse.alkanes.0[0].clone());
@@ -435,18 +435,18 @@ impl StakingPool {
 
         if context.incoming_alkanes.0.len() != 1 {
             return Err(anyhow!(
-                "did not authenticate with only the collection token"
+                "did not authenticate with only the auth token"
             ));
         }
 
         let transfer = context.incoming_alkanes.0[0].clone();
         if transfer.id != context.myself.clone() {
-            return Err(anyhow!("supplied alkane is not collection token"));
+            return Err(anyhow!("supplied alkane is not auth token"));
         }
 
         if transfer.value < 1 {
             return Err(anyhow!(
-                "less than 1 unit of collection token supplied to authenticate"
+                "less than 1 unit of auth token supplied to authenticate"
             ));
         }
 
