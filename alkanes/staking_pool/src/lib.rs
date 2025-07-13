@@ -55,7 +55,7 @@ const COIN_TEMPLATE_ID: u128 = 1736; //TODO 部署代码后得到模板ID
 const COIN_SYMBOL: &str = "forge";
 const COIN_NAME: &str = "Alkanes Forge";
 
-const ORBITAL_TEMPLATE_ID: u128 = 1737;
+const ORBITAL_TEMPLATE_ID: u128 = 89;
 
 const BRC20_NAME_0: &str = "sats";
 
