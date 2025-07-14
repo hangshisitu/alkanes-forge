@@ -325,7 +325,7 @@ impl MintableAlkane {
 
         // Set configuration
         self.set_cap(cap);
-        self.set_data()?;
+        // self.set_data()?;
 
         // Create TokenName from the two parts
         let name = TokenName::new(name_part1, name_part2);

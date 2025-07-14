@@ -51,11 +51,11 @@ const MINING_LAST_HEIGHT: u64 = MINING_FIRST_HEIGHT + 144*360-1; //挖矿的最�
 const MIN_STAKING_VALUE: u64 = 1000;
 const PROFIT_RELEASE_HEIGHT: u64 = 144*180;
 
-const COIN_TEMPLATE_ID: u128 = 1736; //TODO 部署代码后得到模板ID
+const COIN_TEMPLATE_ID: u128 = 3; //TODO 部署代码后得到模板ID
 const COIN_SYMBOL: &str = "forge";
 const COIN_NAME: &str = "Alkanes Forge";
 
-const ORBITAL_TEMPLATE_ID: u128 = 89;
+const ORBITAL_TEMPLATE_ID: u128 = 1;
 
 const BRC20_NAME_0: &str = "sats";
 
