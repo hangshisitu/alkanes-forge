@@ -46,10 +46,12 @@ const PUBLIC_MINT_START_TM: u64 = 902566;
 const CAP: u128 = 100000000000000000;
 const MINING_CAP: u64 = 52000000000000000;
 const MINING_ONE_BLOCK_VOLUME: u64 = 1003086419753;
+const MINING_ONE_DAY_VOLUME: u64 = 144444444444444;
 const MINING_FIRST_HEIGHT: u64 = 450;  //挖矿的第一个块高度
 const MINING_LAST_HEIGHT: u64 = MINING_FIRST_HEIGHT + 144*360-1; //挖矿的最后块高度
 const MIN_STAKING_VALUE: u64 = 1000;
 const PROFIT_RELEASE_HEIGHT: u64 = 144*180;
+const PROFIT_RELEASE_DAY: u64 = 180;
 
 const COIN_TEMPLATE_ID: u128 = 3; //TODO 部署代码后得到模板ID
 const COIN_SYMBOL: &str = "forge";
@@ -252,6 +254,7 @@ impl StakingPool {
             return Err(anyhow!("invalid staking transaction"));
         };
 
+        // TODO staking_height  小于当前高度，且是严格递增
         if staking.staking_height < MINING_FIRST_HEIGHT{
             return Err(anyhow!("Not yet started"));
         }else if staking.staking_height > MINING_LAST_HEIGHT{
@@ -296,21 +299,19 @@ impl StakingPool {
     fn calc_profit_1(&self,index:u128,height:u128) -> Result<(u128,u128,u128)>{ 
         let count  = self.get_orbital_count();
         let curr_staking = self.get_staking(index);
-        let start = curr_staking.staking_height;
-        let end: u64 = curr_staking.get_mining_end_height(height as u64);
+        let start = self.height_to_no(curr_staking.staking_height);
+        let end: u64 = self.height_to_no(curr_staking.get_mining_end_height(height as u64));
         let  c  = Decimal::from(curr_staking.staking_value)
         .checked_mul(Decimal::from(end-start)).unwrap()
         .checked_mul(Decimal::from(period_to_w(curr_staking.period))).unwrap();
 
         let mut pre_v =vec![Decimal::from(0);(end-start) as usize];
 
-        // return Ok((start as u128,end as u128,c.floor().try_into().unwrap()));
-
         let mut v = Decimal::from(0);
         for i in 0..count{
             let staking = self.get_staking(i+1);
-            let t_s = staking.staking_height;
-            let t_e = staking.get_mining_end_height( height as u64);
+            let t_s = self.height_to_no(staking.staking_height);
+            let t_e = self.height_to_no(staking.get_mining_end_height( height as u64));
             let length = max(min(t_e,end)-max(t_s,start),0);
             if length == 0{
                 continue;
@@ -327,17 +328,22 @@ impl StakingPool {
                 cross_s +=1;
             }
         }
-        let p = c.checked_div(v).unwrap().checked_mul(Decimal::from(MINING_ONE_BLOCK_VOLUME)).unwrap().checked_mul(Decimal::from(end-start)).unwrap();
+        let p = if v > Decimal::from(0) {
+            c.checked_div(v).unwrap().checked_mul(Decimal::from(MINING_ONE_DAY_VOLUME)).unwrap().checked_mul(Decimal::from(end-start)).unwrap()
+        }else{
+            Decimal::from(0)
+        };
+
         let curr_staking_w = Decimal::from(curr_staking.staking_value).checked_mul(period_to_w(curr_staking.period)).unwrap();
         //计算每个快收益
-        pre_v.iter_mut().for_each(|v| *v = curr_staking_w.checked_div(*v).unwrap().checked_mul(Decimal::from(MINING_ONE_BLOCK_VOLUME)).unwrap());
+        pre_v.iter_mut().for_each(|v| *v = curr_staking_w.checked_div(*v).unwrap().checked_mul(Decimal::from(MINING_ONE_DAY_VOLUME)).unwrap());
 
-        let release_end = curr_staking.get_release_end_height(height as u64);
-        //计算释放收益 TODO
-        let rate = Decimal::from(1) / Decimal::from(PROFIT_RELEASE_HEIGHT);
+        let release_end = self.height_to_no(curr_staking.get_release_end_height(height as u64));
+        //计算释放收益
+        let rate = Decimal::from(1) / Decimal::from(PROFIT_RELEASE_DAY);
         let release_p: Decimal = pre_v.iter().enumerate().map(|(i,v)| {
             let cnt = release_end.checked_sub(i as u64 + start +1).unwrap();
-            if cnt >= PROFIT_RELEASE_HEIGHT {
+            if cnt >= PROFIT_RELEASE_DAY {
                 *v
             } else {
                 v.checked_mul(rate).unwrap().checked_mul(Decimal::from(cnt)).unwrap()
@@ -349,12 +355,12 @@ impl StakingPool {
 
     fn calc_profit(&self,index:u128,height:u128) -> Result<(u128,u128,u128)>{
         let curr_staking = self.get_staking(index);
-        let mut start = curr_staking.staking_height;
-        let end = curr_staking.get_mining_end_height(height as u64);
+        let mut start = self.height_to_no(curr_staking.staking_height);
+        let end = self.height_to_no(curr_staking.get_mining_end_height(height as u64));
         let curr_staking_w = Decimal::from(curr_staking.staking_value) * period_to_w(curr_staking.period);
-        let rate =Decimal::from(1) / Decimal::from(PROFIT_RELEASE_HEIGHT);
-        let factor = curr_staking_w * Decimal::from(MINING_ONE_BLOCK_VOLUME);
-        let release_end = curr_staking.get_release_end_height(height as u64);
+        let rate =Decimal::from(1) / Decimal::from(PROFIT_RELEASE_DAY);
+        let factor = curr_staking_w * Decimal::from(MINING_ONE_DAY_VOLUME);
+        let release_end = self.height_to_no(curr_staking.get_release_end_height(height as u64));
 
         let mut total_p = Decimal::from(0); 
         let mut total_r = Decimal::from(0);
@@ -362,7 +368,7 @@ impl StakingPool {
             let p = factor / self.get_staking_weight(start);
             total_p += p;
             let cnt = release_end-start-1; //下个块开始释放
-            let r = if cnt >= PROFIT_RELEASE_HEIGHT {
+            let r = if cnt >= PROFIT_RELEASE_DAY {
                 p
             } else {
                 p * rate * Decimal::from(cnt)
@@ -532,10 +538,10 @@ impl StakingPool {
         self.index_invite(index,staking.invite_index);
         let curr_w =  Decimal::from(staking.staking_value) * period_to_w(staking.period);
 
-        let h_w = self.get_staking_weight(staking.staking_height);
-        self.set_staking_weight(staking.staking_height, h_w + curr_w);
-        let h_exp_w = self.get_staking_expire(staking.get_expire_height());
-        self.set_staking_expire(staking.get_expire_height(), h_exp_w + curr_w);
+        let h_w = self.get_staking_weight(self.height_to_no(staking.staking_height));
+        self.set_staking_weight(self.height_to_no(staking.staking_height), h_w + curr_w);
+        let h_exp_w = self.get_staking_expire(self.height_to_no(staking.get_expire_height()));
+        self.set_staking_expire(self.height_to_no(staking.get_expire_height()), h_exp_w + curr_w);
 
 
         // let mut stat = self.get_staking_stat(staking.staking_height);
@@ -560,10 +566,10 @@ impl StakingPool {
         }
 
         let curr_w =  Decimal::from(staking.staking_value) * period_to_w(staking.period);
-        let h_w = self.get_staking_weight(staking.unstaking_height);
+        let h_w = self.get_staking_weight(self.height_to_no(staking.unstaking_height));
         self.set_staking_weight(staking.unstaking_height, h_w - curr_w);
-        let h_exp_w = self.get_staking_expire(staking.get_expire_height());
-        self.set_staking_expire(staking.get_expire_height(), h_exp_w - curr_w);
+        let h_exp_w = self.get_staking_expire(self.height_to_no(staking.get_expire_height()));
+        self.set_staking_expire(self.height_to_no(staking.get_expire_height()), h_exp_w - curr_w);
 
         Ok(())
         // let mut stat = self.get_staking_stat(staking.unstaking_height);
@@ -683,7 +689,7 @@ impl StakingPool {
         let exp = self.get_staking_expire(height);
         let mut w = Decimal::from(0)-exp;
         let mut height = height;
-        while height>MINING_FIRST_HEIGHT {
+        while height>0 {
             height -= 1;
             let v = self.staking_weight_pointer(height).get();
             if v.len()>0 {
@@ -696,7 +702,9 @@ impl StakingPool {
         return w;
     }
 
-
+    fn height_to_no(&self, height: u64) -> u64{
+        (height - MINING_FIRST_HEIGHT)/144
+    }
     fn set_staking_weight(& self, height: u64, w: Decimal) {
         self.staking_weight_pointer(height).set(Arc::new(Staking::serialize_decimal(&w).unwrap()));
     }
@@ -870,5 +878,27 @@ mod test{
         assert_eq!(p,p1);
         assert_eq!(r,r1);
         assert_eq!(w,w1);
+
+        let (p,r,w) = sp.calc_profit(index as u128, 599).unwrap();
+        let (p1,r1,w1) =sp.calc_profit_1(index as u128, 599).unwrap();
+        test_print!("{:?} {:?} {:?}",p1,r1,w1);
+        assert_eq!(p,p1);
+        assert_eq!(r,r1);
+        assert_eq!(w,w1);
+
+        let (p,r,w) = sp.calc_profit(index as u128, 650).unwrap();
+        let (p1,r1,w1) =sp.calc_profit_1(index as u128, 650).unwrap();
+        test_print!("{:?} {:?} {:?}",p1,r1,w1);
+        assert_eq!(p,p1);
+        assert_eq!(r,r1);
+        assert_eq!(w,w1);
+
+        let (p,r,w) = sp.calc_profit(index as u128, 750).unwrap();
+        let (p1,r1,w1) =sp.calc_profit_1(index as u128, 750).unwrap();
+        test_print!("{:?} {:?} {:?}",p1,r1,w1);
+        assert_eq!(p,p1);
+        assert_eq!(r,r1);
+        assert_eq!(w,w1);
+
     }
 }
