@@ -63,7 +63,7 @@ enum OrbitalInstanceMessage {
     GetProfit{height: u128},
 
     #[opcode(1004)]
-    Unstaking,
+    Unstake,
 
     #[opcode(1005)]
     Claim,
@@ -71,13 +71,13 @@ enum OrbitalInstanceMessage {
 
 impl Token for OrbitalInstance {
     fn name(&self) -> String {
-        let name = String::from("Alkanes Staking oribital");
-        format!("{} #{}", name, self.index())
+        let name = String::from("Forge Stake Token");
+        format!("{} #{}", name, self.index() + 1)
     }
 
     fn symbol(&self) -> String {
-        let symbol = String::from("so");
-        format!("{} #{}", symbol, self.index())
+        let symbol = String::from("FST");
+        format!("{} #{}", symbol, self.index() + 1)
     }
 }
 
@@ -251,7 +251,7 @@ impl OrbitalInstance {
         Ok(())
     }
 
-    fn unstaking(&self) -> Result<CallResponse> { 
+    fn unstake(&self) -> Result<CallResponse> {
         self.only_owner()?;
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);

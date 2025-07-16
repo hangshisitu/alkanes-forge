@@ -1,26 +1,19 @@
 [package]
-name = "alkanes-forge"
+name = "forge_stoken"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[workspace]
-members = [
-    "alkanes/*",
-    ".",
-    "crates/*"]
-
 [dependencies]
 alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs",tag = "v0.3.0"}
 alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs",tag = "v0.3.0"}
 metashrew-support = { git = "https://github.com/sandshrewmetaprotocols/metashrew" }
-protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
-ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
 anyhow = "1.0.98"
 
 [build-dependencies]
-anyhow = "1.0.98"
-flate2 = "1.1.2"
-hex = "0.4.3"
+anyhow = "1.0.90"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["console"] }

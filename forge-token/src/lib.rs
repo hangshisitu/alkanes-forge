@@ -6,18 +6,14 @@
 
 use alkanes_runtime::storage::StoragePointer;
 use alkanes_runtime::{declare_alkane, message::MessageDispatch, runtime::AlkaneResponder};
-use alkanes_support::gz;
 use alkanes_support::response::CallResponse;
 use alkanes_support::utils::overflow_error;
-use alkanes_support::witness::find_witness_payload;
 use alkanes_support::{context::Context, parcel::AlkaneTransfer};
 use anyhow::{anyhow, Result};
 use bitcoin::hashes::Hash;
-use bitcoin::{Transaction, Txid};
+use bitcoin::Txid;
 use metashrew_support::compat::to_arraybuffer_layout;
 use metashrew_support::index_pointer::KeyValuePointer;
-use metashrew_support::utils::consensus_decode;
-use std::io::Cursor;
 use std::sync::Arc;
 
 /// Constants for token identification
@@ -78,37 +74,6 @@ impl ContextHandle {
         // This is a placeholder implementation that would normally
         // access the transaction from the runtime context
         Vec::new()
-    }
-}
-
-impl AlkaneResponder for ContextHandle {}
-
-pub const CONTEXT: ContextHandle = ContextHandle(());
-
-/// Extension trait for Context to add transaction_id method
-trait ContextExt {
-    /// Get the transaction ID from the context
-    fn transaction_id(&self) -> Result<Txid>;
-}
-
-#[cfg(test)]
-impl ContextExt for Context {
-    fn transaction_id(&self) -> Result<Txid> {
-        // Test implementation with all zeros
-        Ok(Txid::from_slice(&[0; 32]).unwrap_or_else(|_| {
-            // This should never happen with a valid-length slice
-            panic!("Failed to create zero Txid")
-        }))
-    }
-}
-
-#[cfg(not(test))]
-impl ContextExt for Context {
-    fn transaction_id(&self) -> Result<Txid> {
-        Ok(
-            consensus_decode::<Transaction>(&mut std::io::Cursor::new(CONTEXT.transaction()))?
-                .compute_txid(),
-        )
     }
 }
 
@@ -181,25 +146,6 @@ pub trait MintableToken: AlkaneResponder {
             value,
         })
     }
-
-    /// Get the pointer to the token data
-    fn data_pointer(&self) -> StoragePointer {
-        StoragePointer::from_keyword("/data")
-    }
-
-    /// Get the token data
-    fn data(&self) -> Vec<u8> {
-        gz::decompress(self.data_pointer().get().as_ref().clone()).unwrap_or_else(|_| vec![])
-    }
-
-    /// Set the token data from the transaction
-    fn set_data(&self) -> Result<()> {
-        let tx = consensus_decode::<Transaction>(&mut Cursor::new(CONTEXT.transaction()))?;
-        let data: Vec<u8> = find_witness_payload(&tx, 0).unwrap_or_else(|| vec![]);
-        self.data_pointer().set(Arc::new(data));
-
-        Ok(())
-    }
 }
 
 /// MintableAlkane implements a free mint token contract with security features
@@ -243,11 +189,6 @@ enum MintableAlkaneMessage {
     #[opcode(102)]
     #[returns(u128)]
     GetCap,
-
-    /// Get the token data
-    #[opcode(1000)]
-    #[returns(Vec<u8>)]
-    GetData,
 }
 
 impl MintableAlkane {
@@ -274,7 +215,6 @@ impl MintableAlkane {
         );
         Ok(())
     }
-
 
     /// Get the pointer to the supply cap
     pub fn cap_pointer(&self) -> StoragePointer {
@@ -327,30 +267,10 @@ impl MintableAlkane {
         self.set_cap(cap);
         // self.set_data()?;
 
-        // Create TokenName from the two parts
         let name = TokenName::new(name_part1, name_part2);
         <Self as MintableToken>::set_name_and_symbol(self, name, symbol);
 
-        // Mint all tokens
         response.alkanes.0.push(self.mint(&context, cap)?);
-        
-        Ok(response)
-    }
-
-    /// Set the token name and symbol
-    fn set_name_and_symbol(
-        &self,
-        name_part1: u128,
-        name_part2: u128,
-        symbol: u128,
-    ) -> Result<CallResponse> {
-        let context = self.context()?;
-        let response = CallResponse::forward(&context.incoming_alkanes);
-
-        // Create TokenName from the two parts
-        let name = TokenName::new(name_part1, name_part2);
-        <Self as MintableToken>::set_name_and_symbol(self, name, symbol);
-
         Ok(response)
     }
 
@@ -358,9 +278,7 @@ impl MintableAlkane {
     fn get_name(&self) -> Result<CallResponse> {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
-
         response.data = self.name().into_bytes().to_vec();
-
         Ok(response)
     }
 
@@ -368,9 +286,7 @@ impl MintableAlkane {
     fn get_symbol(&self) -> Result<CallResponse> {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
-
         response.data = self.symbol().into_bytes().to_vec();
-
         Ok(response)
     }
 
@@ -378,9 +294,7 @@ impl MintableAlkane {
     fn get_total_supply(&self) -> Result<CallResponse> {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
-
         response.data = self.total_supply().to_le_bytes().to_vec();
-
         Ok(response)
     }
 
@@ -388,22 +302,10 @@ impl MintableAlkane {
     fn get_cap(&self) -> Result<CallResponse> {
         let context = self.context()?;
         let mut response = CallResponse::forward(&context.incoming_alkanes);
-
         response.data = self.cap().to_le_bytes().to_vec();
-
         Ok(response)
     }
 
-
-    /// Get the token data
-    fn get_data(&self) -> Result<CallResponse> {
-        let context = self.context()?;
-        let mut response = CallResponse::forward(&context.incoming_alkanes);
-
-        response.data = self.data();
-
-        Ok(response)
-    }
 }
 
 impl AlkaneResponder for MintableAlkane {}
